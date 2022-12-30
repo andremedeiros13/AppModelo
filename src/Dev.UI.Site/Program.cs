@@ -1,23 +1,71 @@
-// Tudo inicia a partir do builder
+using Dev.UI.Site.Data;
+using Dev.UI.Site.Servicos;
+using Microsoft.AspNetCore.Mvc.Razor;
+using Microsoft.EntityFrameworkCore;
+
+
 var builder = WebApplication.CreateBuilder(args);
 
-// Adicionando o MVC ao container
+#region " Configurando serviços no container "
+
+// Adicionando suporte a mudança de convenção da rota das areas.
+builder.Services.Configure<RazorViewEngineOptions>(options =>
+{
+    options.AreaViewLocationFormats.Clear();
+    options.AreaViewLocationFormats.Add("/Modulos/{2}/Views/{1}/{0}.cshtml");
+    options.AreaViewLocationFormats.Add("/Modulos/{2}/Views/Shared/{0}.cshtml");
+    options.AreaViewLocationFormats.Add("/Views/Shared/{0}.cshtml");
+});
+
+builder.Services.AddDbContext<MeuDbContext>(options =>
+    options.UseSqlServer(builder.Configuration.GetConnectionString("MeuDbContext")));
+
+// Adicionando suporte ao MVC
 builder.Services.AddControllersWithViews();
 
-// Realizando o buid das configurações que resultará na App
+builder.Services.AddTransient<IPedidoRepository, PedidoRepository>();
+
+builder.Services.AddTransient<IOperacaoTransient, Operacao>();
+builder.Services.AddScoped<IOperacaoScoped, Operacao>();
+builder.Services.AddSingleton<IOperacaoSingleton, Operacao>();
+builder.Services.AddSingleton<IOperacaoSingletonInstance>(new Operacao(Guid.Empty));
+
+builder.Services.AddTransient<OperacaoService>();
+
+builder.Services.AddScoped<MeuDbContext>();
+
 var app = builder.Build();
 
-// Ativando a pagina de erros caso seja ambiente de desenvolvimento
+#endregion
+
+# region " Configurando o resquest dos serviços no pipeline "
+
 if (app.Environment.IsDevelopment())
 {
-    app.UseDeveloperExceptionPage();
+    app.UseMigrationsEndPoint();
 }
+else
+{
+    app.UseExceptionHandler("/Home/Error");
+    app.UseHsts();
+}
+
+app.UseHttpsRedirection();
 app.UseStaticFiles();
 
-// Adicionando Rota padrão
-app.MapControllerRoute(
-    name: "default",
-    pattern: "{controller=Home}/{action=Index}/{id?}");
+// Adicionando suporte a rota
+app.UseRouting();
 
-// Colocando a App para rodar
+// Rota padrão
+app.MapControllerRoute("default", "{controller=Home}/{action=Index}/{id?}");
+
+// Rota de área genérica (não necessário no caso da demo)
+//app.MapControllerRoute("areas", "{area:exists}/{controller=Home}/{action=Index}/{id?}");
+
+// Rota de áreas especializadas
+app.MapAreaControllerRoute("AreaProdutos", "Produtos", "Produtos/{controller=Cadastro}/{action=Index}/{id?}");
+app.MapAreaControllerRoute("AreaVendas", "Vendas", "Vendas/{controller=Pedidos}/{action=Index}/{id?}");
+
 app.Run();
+
+#endregion
